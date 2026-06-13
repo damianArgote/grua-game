@@ -1,6 +1,6 @@
 /* ============================================
    GRÚA MUNICIPAL — Operación Remolque
-   Full Game Script — Vanilla JS + Canvas
+   Versión CABA — Porteño Arcade
    ============================================ */
 
 // ==========================================
@@ -8,44 +8,42 @@
 // ==========================================
 
 const CFG = {
-  // Canvas
-  W: 960,
-  H: 600,
+  W: 960, H: 600,
 
-  // Roads
   ROAD_W: 50,
-  H_ROADS: [25, 175, 325, 475, 575], // y centers
-  V_ROADS: [25, 185, 345, 505, 665, 825, 935], // x centers
+  H_ROADS: [25, 175, 325, 475, 575],
+  V_ROADS: [25, 185, 345, 505, 665, 825, 935],
 
-  // Truck
-  TRUCK_LEN: 44,
-  TRUCK_W: 20,
-  CAB_LEN: 16,
-  MAX_SPEED: 160,
-  REV_SPEED: 80,
-  ACCEL: 220,
-  BRAKE: 280,
-  FRICTION: 90,
-  TURN_SPEED: 2.6,
+  TRUCK_LEN: 44, TRUCK_W: 20, CAB_LEN: 16,
+  MAX_SPEED: 160, REV_SPEED: 80,
+  ACCEL: 220, BRAKE: 280, FRICTION: 90, TURN_SPEED: 2.6,
 
-  // Hooking
-  HOOK_RANGE: 36,
-  HOOK_RATE: 0.45, // progress per second (full in ~2.2s)
-  HOOK_SPEED_LIMIT: 8, // max truck speed for hooking
+  HOOK_RANGE: 36, HOOK_RATE: 0.45, HOOK_SPEED_LIMIT: 8,
 
-  // Timer
   START_TIME: 60,
 
-  // Delivery
   BASE: { x: 28, y: 445, w: 170, h: 130 },
 
-  // Car types
   CARS: {
-    comun:   { label: 'COMÚN',  len: 34, w: 16, color: '#3abf65', points: 100, timeBonus: 10, speedPenalty: 1.0, hookWindow: 0 },
-    camioneta:{ label: '4×4',   len: 40, w: 22, color: '#3a7bd5', points: 250, timeBonus: 15, speedPenalty: 0.75, hookWindow: 0 },
-    deportivo:{ label: 'DEPOR', len: 30, w: 14, color: '#ff6b9d', points: 500, timeBonus: 8,  speedPenalty: 1.0, hookWindow: 8 },
+    comun:    { label:'COMÚN',  len:34, w:16, color:'#3abf65', points:100, timeBonus:10, speedPenalty:1.0, hookWindow:0 },
+    camioneta:{ label:'4×4',   len:40, w:22, color:'#3a7bd5', points:250, timeBonus:15, speedPenalty:0.75, hookWindow:0 },
+    deportivo:{ label:'DEPOR', len:30, w:14, color:'#ff6b9d', points:500, timeBonus:8,  speedPenalty:1.0, hookWindow:8 },
   },
 };
+
+// ==========================================
+// 1b. CHARACTERS (CABA)
+// ==========================================
+
+const CHARACTERS = {
+  evelyn: { shortName:'Evelyn "La Flaca"', color:'#ffcc00', bg:'#1a1a00' },
+  tata:   { shortName:'Tata',               color:'#4488ff', bg:'#001122' },
+  vibora: { shortName:'Víbora',             color:'#22aa44', bg:'#002211' },
+};
+
+// Narrow cobblestone streets (vs wide avenues)
+const NARROW_V = [185, 345, 665, 825];
+const NARROW_H = [175, 475];
 
 // ==========================================
 // 2. DOM REFERENCES
@@ -69,23 +67,33 @@ const restartBtn = document.getElementById('restart-btn');
 // 3. UTILITY
 // ==========================================
 
-function rand(min, max) { return Math.random() * (max - min) + min; }
+function rand(min, max)    { return Math.random() * (max - min) + min; }
 function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
-function lerp(a, b, t) { return a + (b - a) * t; }
-function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+function clamp(v, mn, mx)  { return Math.max(mn, Math.min(mx, v)); }
 function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
-
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function padNum(n, len) { return String(Math.floor(n)).padStart(len, '0'); }
 
-function padNum(n, len) {
-  return String(Math.floor(n)).padStart(len, '0');
+function roundedRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 // ==========================================
-// 4. MAP — ROADS & BUILDINGS
+// 4. MAP — ROADS, BUILDINGS & OBSTACLES
 // ==========================================
 
 let buildings = [];
+let obstacles = [];
 
 function generateBuildings() {
   buildings = [];
@@ -101,96 +109,147 @@ function generateBuildings() {
       const bot   = hr[j+1] - hw - 3;
       if (right <= left || bot <= top) continue;
 
-      // Skip base area (bottom-left corner)
-      if (vr[i] < 200 && hr[j] > 400) continue;
+      if (vr[i] < 200 && hr[j] > 400) continue; // base area
 
-      const hue = randInt(10, 50);
+      const hue = randInt(15, 45);
       buildings.push({
         x: left, y: top, w: right - left, h: bot - top,
-        color: `hsl(${hue}, 30%, ${randInt(18, 32)}%)`,
-        roof: `hsl(${hue}, 25%, ${randInt(28, 40)}%)`,
+        color: `hsl(${hue}, 30%, ${randInt(20, 34)}%)`,
+        roof: `hsl(${hue}, 25%, ${randInt(30, 42)}%)`,
         windows: randInt(2, 5),
+        winColors: Array.from({length: randInt(2,5)}, () => Math.random() < 0.55 ? '#e8d870' : '#113355'),
       });
     }
   }
 }
 
+function generateObstacles() {
+  obstacles = [];
+  const hw = CFG.ROAD_W / 2;
+  const hr = CFG.H_ROADS;
+  const vr = CFG.V_ROADS;
+
+  for (let i = 0; i < vr.length - 1; i++) {
+    for (let j = 0; j < hr.length - 1; j++) {
+      const left  = vr[i]   + hw + 3;
+      const right = vr[i+1] - hw - 3;
+      const top   = hr[j]   + hw + 3;
+      const bot   = hr[j+1] - hw - 3;
+      if (right <= left || bot <= top) continue;
+      if (vr[i] < 200 && hr[j] > 400) continue; // base
+
+      const blkW = right - left;
+      const blkH = bot - top;
+      if (blkW < 30 || blkH < 30) continue;
+
+      // Garbage bins along sidewalk
+      if (Math.random() < 0.45) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const ox = side === -1 ? left - 3 : right - 10;
+        const oy = top + 12 + rand(0, blkH - 30);
+        obstacles.push({ type:'bin', x:ox, y:oy, w:10, h:12, color:'#4a4a3a' });
+      }
+
+      // Newsstand
+      if (Math.random() < 0.18) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const ox = side === -1 ? left - 2 : right - 18;
+        const oy = top + 20 + rand(0, blkH - 50);
+        obstacles.push({ type:'stand', x:ox, y:oy, w:18, h:14, color:'#2d6a3d' });
+      }
+    }
+  }
+}
+
 // ==========================================
-// 5. DIALOGUE SYSTEM
+// 5. DIALOGUE SYSTEM (Porteño)
 // ==========================================
 
 const DIALOGUES = {
   patrolling: [
-    { s: 'Evelyn', t: 'Bien equipo, busquen infractores. La ciudad no se limpia sola.' },
-    { s: 'Tito', t: 'Ahí voy, doña Evelyn. Con cuidado que estos baches...' },
-    { s: 'Cacho', t: 'Ojalá sea uno fácil, no tengo ganas de complicarme.' },
-    { s: 'Evelyn', t: 'Circulen, circulen. No tenemos todo el día.' },
-    { s: 'Tito', t: '¿Alguien ve algo? Yo no veo nada raro por acá.' },
-    { s: 'Cacho', t: '¿Cuántos autos tenemos que remolcar hoy?' },
-    { s: 'Evelyn', t: 'No me gusta repetir las órdenes. Estén atentos.' },
+    { s:'evelyn', t:'Bueno muchachos, nos mandaron a cubrir la zona de Palermo hoy. ¡Tata, arrancá que nos quedamos sin el bono!' },
+    { s:'tata',   t:'Salgo por la avenida, Flaca, porque si agarro el empedrado se me desarma la grúa.' },
+    { s:'vibora', t:'Tranqui Tata, que con estos horarios los infractores sobran. Es como pescar en una bañadera.' },
+    { s:'evelyn', t:'Ojitos al celular, Víbora. Los radares me marcan tres posibles en la zona.' },
+    { s:'tata',   t:'¿En Palermo? Uff, preparate que acá todos se creen dueños de la calle.' },
+    { s:'vibora', t:'Yo ya estoy viendo uno, doña Evelyn. Ahí doblo y lo encaro.' },
+    { s:'evelyn', t:'Acuérdense que el que regala el bono, pierde. No regalen nada.' },
   ],
   approaching: [
-    { s: 'Evelyn', t: '¡Ahí está! Acérquense despacio, no lo espanten.' },
-    { s: 'Tito', t: 'Lo veo. Dejame acomodar la grúa bien cerquita.' },
-    { s: 'Cacho', t: 'Dale Tito, dale, que me muero de ansiedad.' },
-    { s: 'Evelyn', t: 'Despacito, que no se nos escape.' },
-    { s: 'Tito', t: 'Ahí voy, ahí voy... un poquito más...' },
+    { s:'evelyn', t:'¡Ahí está el fantasma! Meté la grúa despacio que no se nos escape.' },
+    { s:'tata',   t:'Lo veo, lo veo. Estacionado en la ochava, el vivo.' },
+    { s:'vibora', t:'¡Mirá ese fantasma! Clavó la 4x4 en la avenida para bajar a comprar facturas. ¡Alineá, Tata, que le sople el gancho!' },
+    { s:'evelyn', t:'Despacito Tata, que si lo rozás nos comemos el garrón de la multa.' },
+    { s:'tata',   t:'Ahí voy, ahí voy... dejame poner bien la cola de la grúa.' },
   ],
   hooking: [
-    { s: 'Evelyn', t: '¡Enganchando! Tito, QUIETO. No te muevas ni un milímetro.' },
-    { s: 'Tito', t: 'Estoy quieto, estoy quieto... aguanta...' },
-    { s: 'Cacho', t: '¡Vamos, vamos, ya casi! ¡No respiren!' },
-    { s: 'Evelyn', t: 'Concéntrense. Un movimiento en falso y perdemos el auto.' },
-    { s: 'Cacho', t: '¡Dale que dale que ya sale!' },
+    { s:'evelyn', t:'¡Enganchando! Tata, QUIETO. Ni un milímetro.' },
+    { s:'tata',   t:'Estoy quieto, estoy quieto... pero si viene un bondi me corro.' },
+    { s:'vibora', t:'¡Vamos, vamos, ya entra! Uy, ahí viene el dueño corriendo con las facturas en la mano. ¡No te muevas, Tata!' },
+    { s:'evelyn', t:'Concéntrense que si lo perdemos nos vamos con las manos vacías.' },
+    { s:'vibora', t:'¡Dale que dale que ya casi! ¡No respires, Tata!' },
+  ],
+  ownerAngry: [
+    { s:'vibora', t:'¡Pará, flaco! ¡Fueron dos minutos! ¡Bajámelo, dale, tengo los pibes en el auto!' },
+    { s:'evelyn', t:'Dos minutos en la ochava, eh. "Estacionar" no es "dejá el auto donde se te cante".' },
+    { s:'tata',   t:'Yo solo manejo, señor. Háblela a ella que es la de la multa.' },
+    { s:'evelyn', t:'Si quiere el auto, vaya al playón y pague la multa. Acá laburamos.' },
   ],
   hooked: [
-    { s: 'Evelyn', t: '¡Perfecto! Bien hecho. Ahora a la base, con cuidado.' },
-    { s: 'Tito', t: 'Ahí lo llevamos. Pesadito está el muchacho.' },
-    { s: 'Cacho', t: '¡Lo logramos! Un aplauso para el equipo.' },
-    { s: 'Evelyn', t: 'Buen trabajo. Ahora de vuelta, que el reloj no perdona.' },
+    { s:'evelyn', t:'¡Perfecto! Bien hecho. Ahora al playón, con cuidado que llevamos carga.' },
+    { s:'tata',   t:'Ahí lo llevamos. Pesadito está el muchacho, debe tener el baúl lleno de bolsas.' },
+    { s:'vibora', t:'¡Lo engarchamos! Un aplauso para el equipo. ¿Viste Tata? Cuando querés podés.' },
+    { s:'evelyn', t:'Buen laburo. Ahora de vuelta, que el reloj no perdona.' },
   ],
   delivering: [
-    { s: 'Evelyn', t: '¡Entrega exitosa! Excelente, equipo.' },
-    { s: 'Tito', t: 'Uno más para el récord. Así se hace.' },
-    { s: 'Cacho', t: '¡Sí señor! Vamos por el siguiente, rápido rápido.' },
-    { s: 'Evelyn', t: 'Bien. Descansen 10 segundos... es broma, ¡al próximo!' },
+    { s:'evelyn', t:'¡Excelente entrega! Directo al playón. Sumamos puntos y nos dieron unos minutos más de prórroga por radio. ¡A buscar otro!' },
+    { s:'tata',   t:'Uno menos. Así se labura, muchachos.' },
+    { s:'vibora', t:'¡Sí señor! Vamos por el siguiente, que la calle está llena de vivos.' },
+    { s:'evelyn', t:'Bien. Descansen diez segundos... es joda, ¡al próximo!' },
   ],
   lowtime: [
-    { s: 'Evelyn', t: '¡Se nos acaba el tiempo! Muévanse.' },
-    { s: 'Tito', t: '¡Uff, la voy a pisar! Agárrense todos.' },
-    { s: 'Cacho', t: '¡No no no, yo no quiero perder! ¡Dale Tito!' },
-    { s: 'Evelyn', t: 'Rápido, el próximo auto. ¡VAMOS!' },
+    { s:'evelyn', t:'¡Se nos acaba el tiempo, muchachos! Muévanse o nos quedamos sin el bono.' },
+    { s:'tata',   t:'¡Uff, la voy a pisar! Agarrate Víbora que viene curva.' },
+    { s:'vibora', t:'¡No no no, yo no quiero perder! ¡Dale Tata, dale que te banco!' },
+    { s:'evelyn', t:'Rápido, el próximo infractor. ¡VAMOS!' },
   ],
   hookFail: [
-    { s: 'Cacho', t: '¡Ay, se nos fue! Lo moviste Tito, te dije que no te muevas.' },
-    { s: 'Evelyn', t: 'Perfecto... lo perdieron. Otra vez, desde cero.' },
-    { s: 'Tito', t: 'Disculpen, me tembló el pie. Ahora sí, quieto total.' },
-    { s: 'Cacho', t: '¡Pero qué hacés Tito! Bueno, vamos de nuevo.' },
+    { s:'vibora', t:'¡Ay, se nos fue! Lo moviste Tata, te dije que no te muevas.' },
+    { s:'evelyn', t:'Perfecto... la pifiaron. Otra vez, desde cero.' },
+    { s:'tata',   t:'Disculpame, venía un colectivo y me corrí. Ahora sí, no me muevo ni si me disparan.' },
+    { s:'vibora', t:'¡Pero la concha de...! Bueno, vamos de nuevo.' },
   ],
   sportsFlee: [
-    { s: 'Evelyn', t: '¡El dueño llegó! Se nos va el deportivo. Mierda.' },
-    { s: 'Tito', t: 'Uh, era rápido el dueño. Ni chance tuvimos.' },
-    { s: 'Cacho', t: '¡Noooo! Ese era el de 500 puntos...' },
+    { s:'evelyn', t:'¡El dueño llegó! Se nos va el deportivo. Lástima, era buena plata.' },
+    { s:'tata',   t:'Uh, el dueño salió disparado del café. Ni chance tuvimos.' },
+    { s:'vibora', t:'¡Noooo! Ese era el de 500 puntos. ¡Maldito dueño!' },
   ],
   gameover: [
-    { s: 'Evelyn', t: 'Se acabó el tiempo. Buen trabajo, equipo. Descansen.' },
-    { s: 'Tito', t: 'Uh, nos quedamos con ganas de más...' },
-    { s: 'Cacho', t: '¡Noooo! Yo quería seguir... bueno, la próxima será.' },
+    { s:'evelyn', t:'Se acabó el tiempo. Buen laburo, equipo. Vamos a tomar un café.' },
+    { s:'tata',   t:'Uh, nos quedamos con las ganas. La próxima rompemos el récord.' },
+    { s:'vibora', t:'¡Noooo! Yo quería seguir... bueno, la próxima será. Vamos a la birra.' },
   ],
 };
 
 let lastDialogue = null;
 
-function setDialogue(speaker, text) {
-  dialChar.textContent = speaker;
+function setDialogue(charKey, text) {
+  const ch = CHARACTERS[charKey];
+  if (!ch) return;
+  dialChar.textContent = ch.shortName;
+  dialChar.style.color = ch.color;
   dialText.textContent = text;
+
+  document.querySelectorAll('.avatar').forEach(el => el.classList.remove('active'));
+  const av = document.getElementById(`avatar-${charKey}`);
+  if (av) av.classList.add('active');
 }
 
 function sayDialogue(phase, force) {
   const pool = DIALOGUES[phase];
   if (!pool || pool.length === 0) return;
-  if (force && force.speaker && force.text) {
-    setDialogue(force.speaker, force.text);
+  if (force && force.s && force.t) {
+    setDialogue(force.s, force.t);
     return;
   }
   let line;
@@ -205,7 +264,7 @@ function sayDialogue(phase, force) {
 }
 
 // ==========================================
-// 6. AUDIO (simple beeps via Web Audio)
+// 6. AUDIO
 // ==========================================
 
 let audioCtx = null;
@@ -222,13 +281,13 @@ function beep(freq, dur, vol) {
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (dur || 0.15));
     osc.start();
     osc.stop(audioCtx.currentTime + (dur || 0.15));
-  } catch (_) { /* silent fail */ }
+  } catch (_) {}
 }
 
 function beepHookProgress() { beep(600, 0.06, 0.05); }
-function beepHookComplete() { beep(880, 0.12, 0.1); setTimeout(() => beep(1100, 0.15, 0.1), 100); }
-function beepDeliver() { beep(660, 0.1, 0.1); setTimeout(() => beep(880, 0.15, 0.1), 120); }
-function beepTimerLow() { beep(440, 0.08, 0.06); }
+function beepHookComplete()  { beep(880, 0.12, 0.1); setTimeout(() => beep(1100, 0.15, 0.1), 100); }
+function beepDeliver()       { beep(660, 0.1, 0.1); setTimeout(() => beep(880, 0.15, 0.1), 120); }
+function beepTimerLow()      { beep(440, 0.08, 0.06); }
 
 // ==========================================
 // 7. GAME STATE
@@ -238,32 +297,24 @@ let game = {};
 
 function resetGame() {
   game = {
-    score: 0,
-    carsDelivered: 0,
-    timeLeft: CFG.START_TIME,
-    gameOver: false,
+    score: 0, carsDelivered: 0,
+    timeLeft: CFG.START_TIME, gameOver: false,
     phase: 'patrolling',
-    hookProgress: 0,
-    isHooking: false,
-    hookCancel: false,
-    dialCooldown: 0,
-    lowTimeBeep: 0,
+    hookProgress: 0, isHooking: false,
+    dialCooldown: 0, lowTimeBeep: 0,
 
     truck: {
       x: CFG.BASE.x + CFG.BASE.w / 2,
       y: CFG.BASE.y + CFG.BASE.h * 0.3,
-      heading: Math.PI / 2, // facing down
-      speed: 0,
-      towing: null,
+      heading: Math.PI / 2,
+      speed: 0, towing: null,
     },
 
-    worldCars: [],
-    target: null,   // the current target car (in worldCars)
-    lastSpawnTime: 0,
-    sportsTimer: 0,
-    popups: [],
+    worldCars: [], target: null,
+    lastSpawnTime: 0, popups: [],
   };
   generateBuildings();
+  generateObstacles();
   spawnCar(true);
   sayDialogue('patrolling');
   overlay.classList.add('hidden');
@@ -287,22 +338,18 @@ document.addEventListener('keyup', (e) => {
 // ==========================================
 
 function randomSpawnPos() {
-  // Spawn on a random road position, aligned with road direction
-  const isHorizontal = Math.random() < 0.5;
+  const isH = Math.random() < 0.5;
   let x, y, heading;
 
-  if (isHorizontal) {
-    y = pick(CFG.H_ROADS.slice(1, -1)); // middle of horizontal road
-    y += rand(-12, 12);
+  if (isH) {
+    y = pick(CFG.H_ROADS.slice(1, -1)) + rand(-12, 12);
     x = rand(60, CFG.W - 60);
-    heading = Math.random() < 0.5 ? 0 : Math.PI; // facing left or right
+    heading = Math.random() < 0.5 ? 0 : Math.PI;
   } else {
-    x = pick(CFG.V_ROADS.slice(1, -1)); // middle of vertical road
-    x += rand(-12, 12);
+    x = pick(CFG.V_ROADS.slice(1, -1)) + rand(-12, 12);
     y = rand(60, CFG.H - 60);
-    heading = Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2; // facing up or down
+    heading = Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
   }
-
   return { x, y, heading };
 }
 
@@ -323,11 +370,8 @@ function spawnCar(force) {
   );
 
   const car = {
-    x: pos.x,
-    y: pos.y,
-    heading: pos.heading,
-    type: typeKey,
-    ...type,
+    x: pos.x, y: pos.y, heading: pos.heading,
+    type: typeKey, ...type,
     hooked: false,
     fleeTimer: type.hookWindow > 0 ? type.hookWindow : 0,
     fleeing: false,
@@ -335,9 +379,7 @@ function spawnCar(force) {
 
   game.worldCars.push(car);
   game.target = car;
-  if (force !== true) {
-    sayDialogue('approaching');
-  }
+  if (force !== true) sayDialogue('approaching');
   updateHUDTarget();
 }
 
@@ -348,50 +390,37 @@ function spawnCar(force) {
 function updatePhysics(dt) {
   const t = game.truck;
 
-  // Acceleration / braking
   if (keys['ArrowUp'] || keys['KeyW']) {
     t.speed += CFG.ACCEL * dt;
   } else if (keys['ArrowDown'] || keys['KeyS']) {
     t.speed -= CFG.BRAKE * dt;
   } else {
-    // Friction
     if (Math.abs(t.speed) < 2) t.speed = 0;
     else t.speed -= Math.sign(t.speed) * CFG.FRICTION * dt;
   }
 
-  // Speed limit
   let maxSpeed = CFG.MAX_SPEED;
-  if (t.towing && t.towing.speedPenalty < 1) {
-    maxSpeed *= t.towing.speedPenalty;
-  }
+  if (t.towing && t.towing.speedPenalty < 1) maxSpeed *= t.towing.speedPenalty;
   t.speed = clamp(t.speed, -CFG.REV_SPEED, maxSpeed);
 
-  // Rotation (only if moving)
   const moving = Math.abs(t.speed) > 1;
   if (moving) {
-    if (keys['ArrowLeft'] || keys['KeyA']) {
+    if (keys['ArrowLeft'] || keys['KeyA'])
       t.heading -= CFG.TURN_SPEED * dt * (t.speed > 0 ? 1 : -0.6);
-    }
-    if (keys['ArrowRight'] || keys['KeyD']) {
+    if (keys['ArrowRight'] || keys['KeyD'])
       t.heading += CFG.TURN_SPEED * dt * (t.speed > 0 ? 1 : -0.6);
-    }
   }
 
-  // Position
   t.x += Math.cos(t.heading) * t.speed * dt;
   t.y += Math.sin(t.heading) * t.speed * dt;
+  t.x = clamp(t.x, 20, CFG.W - 20);
+  t.y = clamp(t.y, 20, CFG.H - 20);
 
-  // Clamp to map with margin
-  const margin = 20;
-  t.x = clamp(t.x, margin, CFG.W - margin);
-  t.y = clamp(t.y, margin, CFG.H - margin);
-
-  // Update towed car position
   if (t.towing) {
     const car = t.towing;
-    const towDist = CFG.TRUCK_LEN / 2 + car.len / 2 + 4;
-    car.x = t.x - Math.cos(t.heading) * towDist;
-    car.y = t.y - Math.sin(t.heading) * towDist;
+    const td = CFG.TRUCK_LEN / 2 + car.len / 2 + 4;
+    car.x = t.x - Math.cos(t.heading) * td;
+    car.y = t.y - Math.sin(t.heading) * td;
     car.heading = t.heading;
   }
 }
@@ -399,24 +428,20 @@ function updatePhysics(dt) {
 function updateHooking(dt) {
   const t = game.truck;
   const target = game.target;
-
   if (!target || target.hooked || target.fleeing) {
     if (game.isHooking) cancelHook();
     return;
   }
 
-  // Calculate truck back position
   const bx = t.x - Math.cos(t.heading) * CFG.TRUCK_LEN / 2;
   const by = t.y - Math.sin(t.heading) * CFG.TRUCK_LEN / 2;
   const d = dist(bx, by, target.x, target.y);
 
-  // Proximity approach dialogue
-  if (d < 120 && game.phase === 'patrolling' && !game.isHooking && game.dialCooldown <= 0) {
+  // Proximity dialogue
+  if (d < 120 && game.phase === 'patrolling' && !game.isHooking && game.dialCooldown <= 0)
     sayDialogue('approaching');
-  }
 
   if (keys['Space'] && d < CFG.HOOK_RANGE && Math.abs(t.speed) < CFG.HOOK_SPEED_LIMIT && !game.gameOver) {
-    // Hooking
     if (!game.isHooking) {
       game.isHooking = true;
       if (game.phase !== 'hooking') {
@@ -427,25 +452,24 @@ function updateHooking(dt) {
     game.hookProgress += CFG.HOOK_RATE * dt;
     beepHookProgress();
 
+    // Random owner interruption during hook
+    if (game.hookProgress > 0.2 && game.hookProgress < 0.6 && Math.random() < 0.0008)
+      sayDialogue('ownerAngry');
+
     if (game.hookProgress >= 1) {
-      // Hook complete!
       game.hookProgress = 1;
       completeHook();
     }
   } else {
-    if (game.isHooking) {
-      cancelHook();
-    }
+    if (game.isHooking) cancelHook();
   }
 
-  // Sports car flee timer
   if (target.fleeTimer > 0) {
     target.fleeTimer -= dt;
     if (target.fleeTimer <= 0 && !target.hooked) {
       target.fleeing = true;
       sayDialogue('sportsFlee');
       beep(300, 0.3, 0.1);
-      // Remove it after a moment
       setTimeout(() => {
         const idx = game.worldCars.indexOf(target);
         if (idx !== -1) game.worldCars.splice(idx, 1);
@@ -458,9 +482,7 @@ function updateHooking(dt) {
 }
 
 function cancelHook() {
-  if (game.hookProgress > 0.1) {
-    sayDialogue('hookFail');
-  }
+  if (game.hookProgress > 0.1) sayDialogue('hookFail');
   game.isHooking = false;
   game.hookProgress = 0;
   game.phase = 'patrolling';
@@ -469,7 +491,6 @@ function cancelHook() {
 function completeHook() {
   const target = game.target;
   if (!target) return;
-
   beepHookComplete();
   game.truck.towing = target;
   target.hooked = true;
@@ -477,19 +498,8 @@ function completeHook() {
   game.hookProgress = 0;
   game.phase = 'towing';
   sayDialogue('hooked');
-
-  // Remove from world cars list
   const idx = game.worldCars.indexOf(target);
   if (idx !== -1) game.worldCars.splice(idx, 1);
-}
-
-function spawnPopup(x, y, text, color) {
-  game.popups.push({
-    x, y, text, color: color || '#ffde5c',
-    life: 2.0,
-    maxLife: 2.0,
-    vy: -40, // pixels per second upward
-  });
 }
 
 function isInBase(x, y) {
@@ -497,58 +507,46 @@ function isInBase(x, y) {
   return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
 }
 
+function spawnPopup(x, y, text, color) {
+  game.popups.push({ x, y, text, color: color || '#ffde5c', life: 2.0, maxLife: 2.0, vy: -40 });
+}
+
 function updateDelivery() {
   const t = game.truck;
   if (t.towing && isInBase(t.x, t.y)) {
-    // Deliver!
     const car = t.towing;
     game.score += car.points;
     game.carsDelivered++;
     game.timeLeft += car.timeBonus;
-
     spawnPopup(CFG.BASE.x + CFG.BASE.w / 2, CFG.BASE.y + 20,
-      `+${car.points} pts  +${car.timeBonus}s`, '#ffde5c');
+      `+${car.points} pts +${car.timeBonus}s`, '#ffde5c');
     beepDeliver();
     sayDialogue('delivering');
     game.phase = 'delivering';
-
     t.towing = null;
     game.target = null;
     updateHUDTarget();
-
-    // Spawn next car after a short delay
     setTimeout(() => {
-      if (!game.gameOver) {
-        spawnCar();
-        game.phase = 'patrolling';
-      }
+      if (!game.gameOver) { spawnCar(); game.phase = 'patrolling'; }
     }, 800);
   }
 }
 
 function updateTimer(dt) {
   if (game.gameOver) return;
-
   game.timeLeft -= dt;
   if (game.timeLeft <= 0) {
     game.timeLeft = 0;
     gameOver();
     return;
   }
-
-  // Low time warning
   if (game.timeLeft <= 15 && game.phase !== 'lowtime') {
     game.phase = 'lowtime';
     sayDialogue('lowtime');
   }
-
-  // Periodic beep when low
   if (game.timeLeft <= 10) {
     game.lowTimeBeep += dt;
-    if (game.lowTimeBeep >= 1) {
-      beepTimerLow();
-      game.lowTimeBeep = 0;
-    }
+    if (game.lowTimeBeep >= 1) { beepTimerLow(); game.lowTimeBeep = 0; }
   }
 }
 
@@ -557,18 +555,12 @@ function updatePopups(dt) {
     const p = game.popups[i];
     p.life -= dt;
     p.y += p.vy * dt;
-    if (p.life <= 0) {
-      game.popups.splice(i, 1);
-    }
+    if (p.life <= 0) game.popups.splice(i, 1);
   }
 }
 
 function updateDialogue(dt) {
-  if (game.dialCooldown > 0) {
-    game.dialCooldown -= dt;
-  }
-
-  // Random banter while patrolling or towing
+  if (game.dialCooldown > 0) game.dialCooldown -= dt;
   if (game.dialCooldown <= 0 && !game.gameOver) {
     if (game.phase === 'patrolling' && !game.isHooking && Math.random() < 0.001) {
       sayDialogue('patrolling');
@@ -596,20 +588,15 @@ function gameOver() {
 }
 
 // ==========================================
-// 12. HUD UPDATES
+// 12. HUD
 // ==========================================
 
 function updateHUD() {
   hudScore.textContent = padNum(game.score, 5);
   hudCars.textContent = game.carsDelivered;
-  const displayTime = Math.max(0, Math.ceil(game.timeLeft));
-  hudTimer.textContent = displayTime;
-
-  if (game.timeLeft <= 15) {
-    hudTimerBox.classList.add('low');
-  } else {
-    hudTimerBox.classList.remove('low');
-  }
+  const dt = Math.max(0, Math.ceil(game.timeLeft));
+  hudTimer.textContent = dt;
+  hudTimerBox.classList.toggle('low', game.timeLeft <= 15);
 }
 
 function updateHUDTarget() {
@@ -620,76 +607,122 @@ function updateHUDTarget() {
 // 13. RENDERER
 // ==========================================
 
-// ---- Background & Roads ----
+// ── Roads + Cobblestone ──
+
+function renderCobblestone(ox, oy, w, h) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ox, oy, w, h);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(90,90,100,0.25)';
+  ctx.lineWidth = 0.5;
+  for (let px = ox; px < ox + w; px += 7) {
+    for (let py = oy; py < oy + h; py += 7) {
+      ctx.strokeRect(px, py, 7, 7);
+    }
+  }
+  ctx.restore();
+}
 
 function renderRoads() {
-  // Asphalt background
   ctx.fillStyle = '#2a2a30';
   ctx.fillRect(0, 0, CFG.W, CFG.H);
 
   const hw = CFG.ROAD_W / 2;
 
-  // Draw horizontal roads
-  ctx.fillStyle = '#3d3d45';
+  // Draw road surfaces
   for (const y of CFG.H_ROADS) {
+    ctx.fillStyle = NARROW_H.includes(y) ? '#3d3d48' : '#4a4a55';
     ctx.fillRect(0, y - hw, CFG.W, CFG.ROAD_W);
   }
-  // Draw vertical roads
   for (const x of CFG.V_ROADS) {
+    ctx.fillStyle = NARROW_V.includes(x) ? '#3d3d48' : '#4a4a55';
     ctx.fillRect(x - hw, 0, CFG.ROAD_W, CFG.H);
   }
 
-  // Lane markings (dashed)
-  ctx.strokeStyle = '#5a5a66';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([12, 12]);
-
+  // Cobblestone texture on narrow streets
   for (const y of CFG.H_ROADS) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(CFG.W, y);
-    ctx.stroke();
+    if (NARROW_H.includes(y)) renderCobblestone(0, y - hw, CFG.W, CFG.ROAD_W);
   }
   for (const x of CFG.V_ROADS) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, CFG.H);
-    ctx.stroke();
+    if (NARROW_V.includes(x)) renderCobblestone(x - hw, 0, CFG.ROAD_W, CFG.H);
   }
 
+  // Lane markings on avenues
+  ctx.strokeStyle = 'rgba(200,200,200,0.2)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([14, 14]);
+  for (const y of CFG.H_ROADS) {
+    if (!NARROW_H.includes(y)) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CFG.W, y); ctx.stroke();
+    }
+  }
+  for (const x of CFG.V_ROADS) {
+    if (!NARROW_V.includes(x)) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CFG.H); ctx.stroke();
+    }
+  }
   ctx.setLineDash([]);
 
-  // Intersection highlights
-  ctx.fillStyle = '#44444d';
+  // Intersections
+  ctx.fillStyle = '#4a4a58';
   for (const y of CFG.H_ROADS) {
     for (const x of CFG.V_ROADS) {
-      ctx.fillRect(x - hw + 2, y - hw + 2, CFG.ROAD_W - 4, CFG.ROAD_W - 4);
+      ctx.fillRect(x - hw + 3, y - hw + 3, CFG.ROAD_W - 6, CFG.ROAD_W - 6);
     }
   }
 }
 
-// ---- Buildings ----
+// ── Yellow Curb (Cordón Amarillo) ──
+
+function renderYellowCurb() {
+  const hw = CFG.ROAD_W / 2;
+  const cs = 14;
+  ctx.fillStyle = '#ffcc00';
+  for (let i = 0; i < CFG.V_ROADS.length - 1; i++) {
+    for (let j = 0; j < CFG.H_ROADS.length - 1; j++) {
+      const left  = CFG.V_ROADS[i]   + hw;
+      const right = CFG.V_ROADS[i+1] - hw;
+      const top   = CFG.H_ROADS[j]   + hw;
+      const bot   = CFG.H_ROADS[j+1] - hw;
+      if (right <= left || bot <= top) continue;
+      // 4 corners of the block (on the road side)
+      ctx.fillRect(left - 2, top - 2, cs, cs);
+      ctx.fillRect(right - cs + 2, top - 2, cs, cs);
+      ctx.fillRect(left - 2, bot - cs + 2, cs, cs);
+      ctx.fillRect(right - cs + 2, bot - cs + 2, cs, cs);
+    }
+  }
+}
+
+// ── Buildings (Ochavas) ──
 
 function renderBuildings() {
+  const ochava = 8;
   for (const b of buildings) {
-    // Building body (shadow)
+    // Shadow
     ctx.fillStyle = '#1a1a22';
-    ctx.fillRect(b.x + 2, b.y + 2, b.w, b.h);
+    roundedRect(b.x + 2, b.y + 2, b.w, b.h, ochava);
+    ctx.fill();
+
     // Building
     ctx.fillStyle = b.color;
-    ctx.fillRect(b.x, b.y, b.w, b.h);
+    roundedRect(b.x, b.y, b.w, b.h, ochava);
+    ctx.fill();
+
     // Roof highlight
     ctx.fillStyle = b.roof;
-    ctx.fillRect(b.x, b.y, b.w, 4);
+    ctx.beginPath();
+    ctx.moveTo(b.x + ochava, b.y);
+    ctx.lineTo(b.x + b.w - ochava, b.y);
+    ctx.quadraticCurveTo(b.x + b.w, b.y, b.x + b.w, b.y + ochava);
+    ctx.lineTo(b.x + b.w, b.y + 5);
+    ctx.lineTo(b.x, b.y + 5);
+    ctx.lineTo(b.x, b.y + ochava);
+    ctx.quadraticCurveTo(b.x, b.y, b.x + ochava, b.y);
+    ctx.fill();
 
-      // Windows (pre-computed)
-    if (!b.winColors) {
-      b.winColors = [];
-      const count = b.windows;
-      for (let i = 0; i < count; i++) {
-        b.winColors.push(Math.random() < 0.6 ? '#e8d870' : '#113355');
-      }
-    }
+    // Windows
     const cols = Math.ceil(Math.sqrt(b.windows * (b.w / b.h)));
     const rows = Math.ceil(b.windows / cols);
     const winW = 8, winH = 6;
@@ -699,11 +732,11 @@ function renderBuildings() {
     for (let r = 0; r < rows && wi < b.windows; r++) {
       for (let c = 0; c < cols && wi < b.windows; c++) {
         const wx = b.x + gapX + c * (winW + gapX);
-        const wy = b.y + 8 + gapY + r * (winH + gapY);
+        const wy = b.y + 10 + gapY + r * (winH + gapY);
         ctx.fillStyle = b.winColors[wi];
         ctx.fillRect(wx, wy, winW, winH);
         ctx.strokeStyle = '#222';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 0.5;
         ctx.strokeRect(wx, wy, winW, winH);
         wi++;
       }
@@ -711,149 +744,171 @@ function renderBuildings() {
   }
 }
 
-// ---- Base ----
+// ── Obstacles (Contenedores y Puestos) ──
+
+function renderObstacles() {
+  for (const o of obstacles) {
+    if (o.type === 'bin') {
+      // Garbage bin
+      ctx.fillStyle = '#33333a';
+      ctx.fillRect(o.x + 1, o.y + 1, o.w, o.h);
+      ctx.fillStyle = o.color;
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.fillStyle = '#555';
+      ctx.fillRect(o.x + 1, o.y, o.w - 2, 2);
+      // Lid
+      ctx.fillStyle = '#2a2a30';
+      ctx.fillRect(o.x - 1, o.y - 3, o.w + 2, 3);
+    } else if (o.type === 'stand') {
+      // Newsstand
+      ctx.fillStyle = '#22222a';
+      ctx.fillRect(o.x + 1, o.y + 1, o.w, o.h);
+      ctx.fillStyle = o.color;
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      // Roof
+      ctx.fillStyle = '#1a4a2a';
+      ctx.fillRect(o.x - 2, o.y - 3, o.w + 4, 3);
+      // Display
+      ctx.fillStyle = '#88aacc';
+      ctx.globalAlpha = 0.3;
+      ctx.fillRect(o.x + 2, o.y + 3, o.w - 4, o.h - 5);
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+// ── Base (Playón de Infractores) ──
 
 function renderBase() {
   const b = CFG.BASE;
-  // Green zone
-  ctx.fillStyle = '#1a3a1a';
-  ctx.fillRect(b.x, b.y, b.w, b.h);
-  ctx.strokeStyle = '#3aff3a';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(b.x, b.y, b.w, b.h);
 
-  // Hatching
-  ctx.strokeStyle = 'rgba(58, 255, 58, 0.15)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i < b.w; i += 12) {
-    ctx.beginPath();
-    ctx.moveTo(b.x + i, b.y);
-    ctx.lineTo(b.x + i - 20, b.y + b.h);
-    ctx.stroke();
+  // Concrete floor
+  ctx.fillStyle = '#2e2e36';
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+
+  // Yellow/black safety stripes (bottom edge)
+  const sh = 14;
+  for (let i = 0; i < b.w; i += 20) {
+    ctx.fillStyle = (Math.floor(i / 20) % 2 === 0) ? '#ffcc00' : '#111';
+    ctx.fillRect(b.x + i, b.y + b.h - sh, 20, sh);
   }
 
-  // Label
-  ctx.fillStyle = '#3aff3a';
-  ctx.font = '16px "Press Start 2P", monospace';
+  // Yellow/black safety stripes (left edge)
+  for (let i = 0; i < b.h; i += 20) {
+    ctx.fillStyle = (Math.floor(i / 20) % 2 === 0) ? '#ffcc00' : '#111';
+    ctx.fillRect(b.x, b.y + i, 8, 20);
+  }
+
+  // Border
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(b.x, b.y, b.w, b.h);
+
+  // Sign background
+  ctx.fillStyle = '#1a1a22';
+  roundedRect(b.x + b.w / 2 - 80, b.y + 8, 160, 36, 4);
+  ctx.fill();
+  ctx.strokeStyle = '#ffcc00';
+  ctx.lineWidth = 2;
+  roundedRect(b.x + b.w / 2 - 80, b.y + 8, 160, 36, 4);
+  ctx.stroke();
+
+  // Sign text
+  ctx.fillStyle = '#ffcc00';
+  ctx.font = '9px "Press Start 2P", monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('BASE', b.x + b.w / 2, b.y + b.h / 2);
+  ctx.fillText('PLAYÓN DE', b.x + b.w / 2, b.y + 20);
+  ctx.fillText('INFRACTORES', b.x + b.w / 2, b.y + 35);
 
-  // Glow
-  ctx.shadowColor = '#3aff3a';
-  ctx.shadowBlur = 15;
-  ctx.fillText('BASE', b.x + b.w / 2, b.y + b.h / 2);
+  // Glow on sign
+  ctx.shadowColor = '#ffcc00';
+  ctx.shadowBlur = 10;
+  ctx.fillText('INFRACTORES', b.x + b.w / 2, b.y + 35);
   ctx.shadowBlur = 0;
+
+  // Fence cross-hatch
+  ctx.strokeStyle = 'rgba(120,120,130,0.15)';
+  ctx.lineWidth = 0.5;
+  for (let i = 16; i < b.w; i += 16) {
+    ctx.beginPath(); ctx.moveTo(b.x + i, b.y); ctx.lineTo(b.x + i, b.y + b.h); ctx.stroke();
+  }
+  for (let i = 12; i < b.h; i += 12) {
+    ctx.beginPath(); ctx.moveTo(b.x, b.y + i); ctx.lineTo(b.x + b.w, b.y + i); ctx.stroke();
+  }
 }
 
-// ---- Cars (on map) ----
+// ── World Cars ──
 
 function renderWorldCars() {
   for (const car of game.worldCars) {
     drawCar(car);
-
-    // Warning indicator for target
-    if (car === game.target && !car.fleeing) {
-      renderTargetIndicator(car);
-    }
-
-    // Fleeing effect
+    if (car === game.target && !car.fleeing) renderTargetIndicator(car);
     if (car.fleeing) {
       ctx.fillStyle = '#ff3333';
       ctx.font = '10px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('¡HUYE!', car.x, car.y - 28);
+      ctx.fillText('¡SE FUE!', car.x, car.y - 28);
     }
-
-    // Hook window bar (sports car)
     if (car.fleeTimer > 0 && car.hookWindow > 0 && !car.hooked) {
-      const bw = 36;
-      const bh = 4;
-      const bx = car.x - bw / 2;
-      const by = car.y - car.len / 2 - 16;
-      ctx.fillStyle = '#333';
-      ctx.fillRect(bx, by, bw, bh);
+      const bw = 36, bh = 4;
+      const bx = car.x - bw / 2, by = car.y - car.len / 2 - 16;
+      ctx.fillStyle = '#333'; ctx.fillRect(bx, by, bw, bh);
       ctx.fillStyle = car.fleeTimer / car.hookWindow > 0.3 ? '#ff6b9d' : '#ff3333';
       ctx.fillRect(bx, by, bw * (car.fleeTimer / car.hookWindow), bh);
     }
   }
 }
 
-// ---- Target Indicator ----
+// ── Target Indicator ──
 
 function renderTargetIndicator(car) {
   const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 180);
   const radius = 28 + 8 * pulse;
-
-  ctx.strokeStyle = `rgba(255, 60, 60, ${0.3 + 0.4 * pulse})`;
+  ctx.strokeStyle = `rgba(255,60,60,${0.3 + 0.4 * pulse})`;
   ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(car.x, car.y, radius, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Second ring
-  ctx.strokeStyle = `rgba(255, 200, 60, ${0.2 + 0.3 * (1 - pulse)})`;
+  ctx.beginPath(); ctx.arc(car.x, car.y, radius, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = `rgba(255,200,60,${0.2 + 0.3 * (1 - pulse)})`;
   ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(car.x, car.y, radius + 8, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Arrow pointing down from above
+  ctx.beginPath(); ctx.arc(car.x, car.y, radius + 8, 0, Math.PI * 2); ctx.stroke();
   const arrowY = car.y - car.len / 2 - 20 - 8 * pulse;
-  ctx.fillStyle = `rgba(255, 60, 60, ${0.6 + 0.4 * pulse})`;
+  ctx.fillStyle = `rgba(255,60,60,${0.6 + 0.4 * pulse})`;
   ctx.beginPath();
   ctx.moveTo(car.x, arrowY + 8);
   ctx.lineTo(car.x - 5, arrowY);
   ctx.lineTo(car.x + 5, arrowY);
-  ctx.closePath();
-  ctx.fill();
+  ctx.closePath(); ctx.fill();
 }
 
-// ---- Draw Vehicle ----
+// ── Draw Vehicle (generic car) ──
 
 function drawCar(car) {
   ctx.save();
   ctx.translate(car.x, car.y);
   ctx.rotate(car.heading);
+  const l = car.len, w = car.w, hl = l / 2, hw = w / 2;
 
-  const l = car.len;
-  const w = car.w;
-  const hl = l / 2;
-  const hw = w / 2;
-
-  // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.fillRect(-hl + 2, -hw + 2, l, w);
-
-  // Body
   ctx.fillStyle = car.color || '#3abf65';
   ctx.fillRect(-hl, -hw, l, w);
-
-  // Roof/cabin (slightly darker top section)
   ctx.fillStyle = 'rgba(0,0,0,0.2)';
   ctx.fillRect(-hl, -hw, l, w * 0.4);
 
-  // Windshield
   ctx.fillStyle = '#88ccff';
   ctx.globalAlpha = 0.6;
   ctx.fillRect(hl - 8, -hw * 0.35, 6, w * 0.7);
-  ctx.globalAlpha = 1;
-
-  // Rear window
-  ctx.fillStyle = '#88ccff';
   ctx.globalAlpha = 0.4;
   ctx.fillRect(-hl + 2, -hw * 0.35, 5, w * 0.7);
   ctx.globalAlpha = 1;
 
-  // Outline
   ctx.strokeStyle = 'rgba(0,0,0,0.4)';
   ctx.lineWidth = 1;
   ctx.strokeRect(-hl, -hw, l, w);
-
   ctx.restore();
 }
 
-// ---- Truck ----
+// ── Truck ──
 
 function renderTruck() {
   const t = game.truck;
@@ -861,45 +916,32 @@ function renderTruck() {
   ctx.translate(t.x, t.y);
   ctx.rotate(t.heading);
 
-  const tl = CFG.TRUCK_LEN;
-  const tw = CFG.TRUCK_W;
-  const cl = CFG.CAB_LEN;
-  const hl = tl / 2;
-  const hw = tw / 2;
+  const tl = CFG.TRUCK_LEN, tw = CFG.TRUCK_W, cl = CFG.CAB_LEN;
+  const hl = tl / 2, hw = tw / 2;
 
-  // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(-hl + 3, -hw + 3, tl, tw);
 
-  // Flatbed (rear)
   ctx.fillStyle = '#cc8833';
   ctx.fillRect(-hl, -hw, tl - cl, tw);
-
-  // Flatbed details
   ctx.strokeStyle = '#aa6622';
   ctx.lineWidth = 1;
   for (let i = 0; i < 3; i++) {
     const rx = -hl + 6 + i * 10;
-    ctx.beginPath();
-    ctx.moveTo(rx, -hw);
-    ctx.lineTo(rx, hw);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rx, -hw); ctx.lineTo(rx, hw); ctx.stroke();
   }
 
-  // Cab (front)
   ctx.fillStyle = '#dd9944';
   ctx.fillRect(hl - cl, -hw, cl, tw);
-
   // Windshield
   ctx.fillStyle = '#88ccff';
   ctx.globalAlpha = 0.7;
   ctx.fillRect(hl - 5, -hw * 0.75, 4, tw * 0.5);
   ctx.globalAlpha = 1;
 
-  // Light bar (top of cab)
+  // Light bar
   ctx.fillStyle = '#ff4444';
   ctx.fillRect(hl - cl + 2, -hw - 3, cl - 4, 3);
-  // Strobe effect
   if (Math.floor(Date.now() / 300) % 2 === 0) {
     ctx.fillStyle = '#ffaa00';
     ctx.fillRect(hl - cl + 3, -hw - 3, 3, 3);
@@ -908,113 +950,92 @@ function renderTruck() {
     ctx.fillRect(hl - cl + 8, -hw - 3, 3, 3);
   }
 
-  // Hook at the back
+  // Back hook
   ctx.fillStyle = '#666';
   ctx.fillRect(-hl - 2, -2, 4, 4);
 
-  // Outline
   ctx.strokeStyle = '#5a3a1a';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(-hl, -hw, tl, tw);
 
-  // Speed lines (when going fast)
+  // Speed lines
   const absSpeed = Math.abs(t.speed);
   if (absSpeed > 80) {
     ctx.strokeStyle = `rgba(255,255,255,${0.1 + 0.1 * (absSpeed / CFG.MAX_SPEED)})`;
     ctx.lineWidth = 2;
     for (let i = 0; i < 3; i++) {
       const sy = -hw - 6 - i * 8;
-      ctx.beginPath();
-      ctx.moveTo(-hl + 5, sy);
-      ctx.lineTo(hl - 5, sy);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-hl + 5, sy); ctx.lineTo(hl - 5, sy); ctx.stroke();
     }
   }
-
   ctx.restore();
 }
 
-// ---- Cable ----
+// ── Cable ──
 
 function renderCable() {
   const t = game.truck;
   if (!t.towing) return;
-
   const car = t.towing;
   const bx = t.x - Math.cos(t.heading) * CFG.TRUCK_LEN / 2;
   const by = t.y - Math.sin(t.heading) * CFG.TRUCK_LEN / 2;
   const fx = car.x + Math.cos(car.heading) * car.len / 2;
   const fy = car.y + Math.sin(car.heading) * car.len / 2;
+  const mx = (bx + fx) / 2, my = (by + fy) / 2 + 8;
 
-  // Cable with sag
   ctx.beginPath();
   ctx.moveTo(bx, by);
-  const midX = (bx + fx) / 2;
-  const midY = (by + fy) / 2 + 8; // sag
-  ctx.quadraticCurveTo(midX, midY, fx, fy);
-  ctx.strokeStyle = '#888888';
+  ctx.quadraticCurveTo(mx, my, fx, fy);
+  ctx.strokeStyle = '#888';
   ctx.lineWidth = 2.5;
-  ctx.setLineDash([]);
   ctx.stroke();
 
-  // Second cable (double chain look)
-  ctx.strokeStyle = '#666666';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(bx - 2, by);
-  ctx.quadraticCurveTo(midX - 2, midY + 2, fx - 2, fy);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(bx + 2, by);
-  ctx.quadraticCurveTo(midX + 2, midY + 2, fx + 2, fy);
-  ctx.stroke();
+  for (const [ox, oy] of [[-2,0],[2,0]]) {
+    ctx.beginPath();
+    ctx.moveTo(bx + ox, by + oy);
+    ctx.quadraticCurveTo(mx + ox, my + 2, fx + ox, fy + oy);
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
 }
 
-// ---- Hook Progress Bar ----
+// ── Hook Progress Bar ──
 
 function renderHookProgress() {
   if (!game.isHooking && game.hookProgress === 0) return;
-
   const t = game.truck;
-  const bw = 60;
-  const bh = 8;
-  const bx = t.x - bw / 2;
-  const by = t.y - CFG.TRUCK_W / 2 - 18;
+  const bw = 60, bh = 8;
+  const bx = t.x - bw / 2, by = t.y - CFG.TRUCK_W / 2 - 18;
 
-  // Background
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
   ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
 
-  // Progress
   const p = game.hookProgress;
   const grad = ctx.createLinearGradient(bx, by, bx + bw, by);
-  if (p < 0.5) {
-    grad.addColorStop(0, '#ffee44');
-    grad.addColorStop(1, '#ffaa00');
-  } else if (p < 0.85) {
-    grad.addColorStop(0, '#ffaa00');
-    grad.addColorStop(1, '#ff6600');
-  } else {
-    grad.addColorStop(0, '#44ff44');
-    grad.addColorStop(1, '#00cc00');
-  }
+  if (p < 0.5)      { grad.addColorStop(0,'#ffee44'); grad.addColorStop(1,'#ffaa00'); }
+  else if (p < 0.85){ grad.addColorStop(0,'#ffaa00'); grad.addColorStop(1,'#ff6600'); }
+  else              { grad.addColorStop(0,'#44ff44'); grad.addColorStop(1,'#00cc00'); }
   ctx.fillStyle = grad;
   ctx.fillRect(bx, by, bw * p, bh);
-
-  // Border
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = '#fff';
   ctx.lineWidth = 1;
   ctx.strokeRect(bx, by, bw, bh);
 
-  // Percentage text
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = '#fff';
   ctx.font = 'bold 8px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
   ctx.fillText(`${Math.floor(p * 100)}%`, t.x, by - 2);
 }
 
-// ---- Score Popups ----
+// ── Towed Car ──
+
+function renderTowedCar() {
+  if (game.truck.towing) drawCar(game.truck.towing);
+}
+
+// ── Score Popups ──
 
 function renderPopups() {
   for (const p of game.popups) {
@@ -1035,22 +1056,14 @@ function renderPopups() {
   }
 }
 
-// ---- Towed Car render ----
-
-function renderTowedCar() {
-  if (game.truck.towing) {
-    drawCar(game.truck.towing);
-  }
-}
-
-// ---- Controls hint ----
+// ── Controls Hint ──
 
 function renderControlsHint() {
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
-  ctx.font = '10px "Press Start 2P", monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.font = '9px "Press Start 2P", monospace';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'bottom';
-  ctx.fillText('WASD/FLECHAS: Conducir  |  ESPACIO: Enganchar', 12, CFG.H - 10);
+  ctx.fillText('WASD/FLECHAS: Conducir | ESPACIO: Enganchar', 12, CFG.H - 10);
 }
 
 // ==========================================
@@ -1059,7 +1072,6 @@ function renderControlsHint() {
 
 function update(dt) {
   if (game.gameOver) return;
-
   updatePhysics(dt);
   updateHooking(dt);
   updateTimer(dt);
@@ -1072,31 +1084,20 @@ function update(dt) {
 function render() {
   ctx.clearRect(0, 0, CFG.W, CFG.H);
 
-  // Map layers
   renderRoads();
-  renderBase();
+  renderYellowCurb();
   renderBuildings();
-
-  // World cars (on map)
+  renderObstacles();
+  renderBase();
   renderWorldCars();
-
-  // Cable (behind tower if towing)
   renderCable();
-
-  // Towed car (behind truck)
   renderTowedCar();
-
-  // Truck (on top)
   renderTruck();
-
-  // Effects
   renderHookProgress();
   renderPopups();
-
-  // HUD overlay on canvas
   renderControlsHint();
 
-  // "REMOLCANDO" indicator
+  // REMOLCANDO badge
   if (game.truck.towing) {
     ctx.fillStyle = '#ffaa00';
     ctx.font = '9px "Press Start 2P", monospace';
@@ -1105,16 +1106,14 @@ function render() {
     ctx.fillText('▼ REMOLCANDO ▼', game.truck.x, game.truck.y - CFG.TRUCK_W / 2 - 22);
   }
 
-  // "EN BASE" indicator when near base
+  // Playón indicator
   if (isInBase(game.truck.x, game.truck.y)) {
-    ctx.fillStyle = '#3aff3a';
+    ctx.fillStyle = '#ffcc00';
     ctx.font = '9px "Press Start 2P", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillText('✔ EN BASE', game.truck.x, game.truck.y + CFG.TRUCK_W / 2 + 16);
+    ctx.fillText('✔ EN PLAYÓN', game.truck.x, game.truck.y + CFG.TRUCK_W / 2 + 16);
   }
-
-  // Game Over overlay is handled by HTML/CSS
 }
 
 // ==========================================
@@ -1126,10 +1125,8 @@ let lastTime = 0;
 function gameLoop(timestamp) {
   const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp || 0;
-
   update(dt);
   render();
-
   requestAnimationFrame(gameLoop);
 }
 
@@ -1137,9 +1134,7 @@ function gameLoop(timestamp) {
 // 16. RESTART
 // ==========================================
 
-restartBtn.addEventListener('click', () => {
-  resetGame();
-});
+restartBtn.addEventListener('click', resetGame);
 
 // ==========================================
 // 17. BOOT

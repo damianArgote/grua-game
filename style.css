@@ -1,5 +1,5 @@
 /* ============================================
-   GRÚA MUNICIPAL — Arcade Style
+   GRÚA MUNICIPAL — Arcade Style CABA
    ============================================ */
 
 *, *::before, *::after {
@@ -94,28 +94,182 @@ body {
 #dialogue-box {
   background: #0d0d14;
   border-top: 2px solid #ff6a00;
-  padding: 10px 18px;
-  min-height: 68px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 74px;
+  padding: 8px 14px;
+  gap: 14px;
+}
+
+/* ── Avatars Row ── */
+
+#avatars-row {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.avatar {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+  transition: all 0.25s ease;
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+.avatar.active {
+  opacity: 1;
+  filter: grayscale(0);
+}
+
+/* Evelyn — Amarillo flúor */
+#avatar-evelyn .avatar-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #ffcc00;
+  background: radial-gradient(circle at 50% 30%, #f5e6d3 0%, #e8d5c0 60%, #d4b896 100%);
+  box-shadow: inset 0 -4px 0 #b8956a, inset 0 0 0 3px #ffcc00;
+  position: relative;
+  overflow: hidden;
+}
+/* Evelyn's black hair bun */
+#avatar-evelyn .avatar-icon::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  height: 20px;
+  background: #1a1a1a;
+  border-radius: 50% 50% 0 0;
+}
+#avatar-evelyn .avatar-icon::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  box-shadow: 0 0 0 2px #ffcc00;
+}
+#avatar-evelyn.active .avatar-icon {
+  box-shadow: inset 0 -4px 0 #b8956a, inset 0 0 0 3px #ffcc00, 0 0 16px #ffcc00;
+}
+
+/* Tata — Azul mecánico */
+#avatar-tata .avatar-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #4488ff;
+  background: radial-gradient(circle at 50% 40%, #e8d5c0 0%, #d4b896 50%, #c4a882 100%);
+  box-shadow: inset 0 -4px 0 #a8886a, inset 0 0 0 3px #4488ff;
+  position: relative;
+  overflow: hidden;
+}
+/* Tata's cap */
+#avatar-tata .avatar-icon::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  height: 14px;
+  background: #555555;
+  border-radius: 4px 4px 0 0;
+}
+/* Cap visor */
+#avatar-tata .avatar-icon::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-30%);
+  width: 18px;
+  height: 4px;
+  background: #444;
+  border-radius: 0 4px 4px 0;
+}
+#avatar-tata.active .avatar-icon {
+  box-shadow: inset 0 -4px 0 #a8886a, inset 0 0 0 3px #4488ff, 0 0 16px #4488ff;
+}
+
+/* Víbora — Verde oscuro */
+#avatar-vibora .avatar-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #22aa44;
+  background: radial-gradient(circle at 50% 30%, #f0dcc8 0%, #dcc4a8 60%, #c8ac88 100%);
+  box-shadow: inset 0 -4px 0 #a8886a, inset 0 0 0 3px #22aa44;
+  position: relative;
+  overflow: hidden;
+}
+/* Víbora's spiky hair */
+#avatar-vibora .avatar-icon::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 2px;
+  right: 2px;
+  height: 18px;
+  background: #2a1a0a;
+  clip-path: polygon(10% 0%, 25% 40%, 40% 0%, 55% 40%, 70% 0%, 85% 40%, 100% 0%, 100% 100%, 0% 100%);
+}
+/* Snake tattoo hint on arm */
+#avatar-vibora .avatar-icon::after {
+  content: '🐍';
+  font-size: 8px;
+  position: absolute;
+  bottom: 4px;
+  right: 2px;
+  opacity: 0.5;
+}
+#avatar-vibora.active .avatar-icon {
+  box-shadow: inset 0 -4px 0 #a8886a, inset 0 0 0 3px #22aa44, 0 0 16px #22aa44;
+}
+
+.avatar-name {
+  font-size: 7px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #888;
+  transition: color 0.25s;
+}
+#avatar-evelyn.active .avatar-name { color: #ffcc00; }
+#avatar-tata.active .avatar-name    { color: #4488ff; }
+#avatar-vibora.active .avatar-name  { color: #22aa44; }
+
+/* ── Dialogue Content ── */
+
+#dialogue-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
 #dialogue-char {
-  font-size: 10px;
-  color: #ff6a00;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  margin-bottom: 5px;
-  text-shadow: 0 0 6px rgba(255, 106, 0, 0.5);
+  font-size: 11px;
+  font-family: 'Press Start 2P', monospace;
+  letter-spacing: 1px;
+  transition: color 0.25s;
 }
 
 #dialogue-text {
   font-family: 'Share Tech Mono', 'Courier New', monospace;
-  font-size: 15px;
+  font-size: 14px;
   color: #dddddd;
   line-height: 1.5;
-  min-height: 22px;
+  word-wrap: break-word;
 }
 
 /* ── Game Over Overlay ── */
@@ -208,8 +362,9 @@ body {
   }
   .hud-label { font-size: 7px; }
   .hud-value { font-size: 12px; }
-  #dialogue-char { font-size: 9px; }
-  #dialogue-text { font-size: 13px; }
+  #dialogue-char { font-size: 10px; }
+  #dialogue-text { font-size: 12px; }
+  .avatar .avatar-icon { width: 34px; height: 34px; }
   #gameover-content h1 { font-size: 18px; }
   .gameover-score { font-size: 26px; }
   #gameover-content { padding: 30px 24px; }
@@ -220,8 +375,10 @@ body {
   .hud-item { padding: 2px 3px; }
   .hud-label { font-size: 6px; letter-spacing: 1px; }
   .hud-value { font-size: 10px; }
-  #dialogue-box { padding: 8px 12px; min-height: 56px; }
-  #dialogue-char { font-size: 8px; }
-  #dialogue-text { font-size: 11px; }
+  #dialogue-box { padding: 6px 10px; min-height: 60px; gap: 8px; }
+  #dialogue-char { font-size: 9px; }
+  #dialogue-text { font-size: 10px; }
+  .avatar .avatar-icon { width: 28px; height: 28px; }
+  .avatar-name { font-size: 6px; }
   #restart-btn { font-size: 9px; padding: 12px 20px; }
 }
