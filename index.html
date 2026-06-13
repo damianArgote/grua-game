@@ -31,22 +31,22 @@
       </div>
     </div>
 
-    <!-- Canvas -->
-    <canvas id="gameCanvas" width="960" height="600"></canvas>
+    <!-- Phaser crea su propio canvas acá -->
+    <div id="phaser-wrapper"></div>
 
     <!-- Dialogue Box -->
     <div id="dialogue-box">
       <div id="avatars-row">
         <div class="avatar" id="avatar-evelyn" data-char="evelyn">
-          <div class="avatar-icon"></div>
+          <div class="avatar-icon"><img src="assets/Evelyn.png" alt="Evelyn"></div>
           <div class="avatar-name">Evelyn</div>
         </div>
         <div class="avatar" id="avatar-tata" data-char="tata">
-          <div class="avatar-icon"></div>
+          <div class="avatar-icon"><img src="assets/Tata.png" alt="Tata"></div>
           <div class="avatar-name">Tata</div>
         </div>
         <div class="avatar" id="avatar-vibora" data-char="vibora">
-          <div class="avatar-icon"></div>
+          <div class="avatar-icon"><img src="assets/Vivora.png" alt="Víbora"></div>
           <div class="avatar-name">Víbora</div>
         </div>
       </div>
@@ -72,6 +72,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Phaser 3 desde CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

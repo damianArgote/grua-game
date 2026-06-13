@@ -78,14 +78,17 @@ body {
   to   { opacity: 0.6; transform: scale(1.08); }
 }
 
-/* ── Canvas ── */
+/* ── Phaser Canvas ── */
 
-#gameCanvas {
-  display: block;
+#phaser-wrapper {
+  position: relative;
   width: 100%;
-  height: auto;
   aspect-ratio: 960 / 600;
   background: #1a1a22;
+  overflow: hidden;
+}
+#phaser-wrapper canvas {
+  display: block;
   cursor: none;
 }
 
@@ -125,115 +128,51 @@ body {
   filter: grayscale(0);
 }
 
-/* Evelyn — Amarillo flúor */
-#avatar-evelyn .avatar-icon {
+/* ── Avatar Icons (pixel art portraits) ── */
+
+.avatar-icon {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 2px solid #ffcc00;
-  background: radial-gradient(circle at 50% 30%, #f5e6d3 0%, #e8d5c0 60%, #d4b896 100%);
-  box-shadow: inset 0 -4px 0 #b8956a, inset 0 0 0 3px #ffcc00;
   position: relative;
   overflow: hidden;
+  border: 2px solid;
 }
-/* Evelyn's black hair bun */
-#avatar-evelyn .avatar-icon::before {
-  content: '';
-  position: absolute;
-  top: -4px;
-  left: -4px;
-  right: -4px;
-  height: 20px;
-  background: #1a1a1a;
-  border-radius: 50% 50% 0 0;
+.avatar-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Los portraits originales son 1254×1254, usamos smooth para
+     que el escalado a 40px no se vea blocky */
+  image-rendering: auto;
 }
-#avatar-evelyn .avatar-icon::after {
-  content: '';
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 10px;
-  height: 6px;
-  border-radius: 50%;
-  background: #1a1a1a;
-  box-shadow: 0 0 0 2px #ffcc00;
+
+/* Evelyn — Amarillo flúor */
+#avatar-evelyn .avatar-icon {
+  border-color: #ffcc00;
+  box-shadow: inset 0 0 0 3px #ffcc00;
 }
 #avatar-evelyn.active .avatar-icon {
-  box-shadow: inset 0 -4px 0 #b8956a, inset 0 0 0 3px #ffcc00, 0 0 16px #ffcc00;
+  box-shadow: inset 0 0 0 3px #ffcc00, 0 0 16px #ffcc00;
 }
 
 /* Tata — Azul mecánico */
 #avatar-tata .avatar-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 2px solid #4488ff;
-  background: radial-gradient(circle at 50% 40%, #e8d5c0 0%, #d4b896 50%, #c4a882 100%);
-  box-shadow: inset 0 -4px 0 #a8886a, inset 0 0 0 3px #4488ff;
-  position: relative;
-  overflow: hidden;
-}
-/* Tata's cap */
-#avatar-tata .avatar-icon::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  height: 14px;
-  background: #555555;
-  border-radius: 4px 4px 0 0;
-}
-/* Cap visor */
-#avatar-tata .avatar-icon::after {
-  content: '';
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-30%);
-  width: 18px;
-  height: 4px;
-  background: #444;
-  border-radius: 0 4px 4px 0;
+  border-color: #4488ff;
+  box-shadow: inset 0 0 0 3px #4488ff;
 }
 #avatar-tata.active .avatar-icon {
-  box-shadow: inset 0 -4px 0 #a8886a, inset 0 0 0 3px #4488ff, 0 0 16px #4488ff;
+  box-shadow: inset 0 0 0 3px #4488ff, 0 0 16px #4488ff;
 }
 
 /* Víbora — Verde oscuro */
 #avatar-vibora .avatar-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 2px solid #22aa44;
-  background: radial-gradient(circle at 50% 30%, #f0dcc8 0%, #dcc4a8 60%, #c8ac88 100%);
-  box-shadow: inset 0 -4px 0 #a8886a, inset 0 0 0 3px #22aa44;
-  position: relative;
-  overflow: hidden;
-}
-/* Víbora's spiky hair */
-#avatar-vibora .avatar-icon::before {
-  content: '';
-  position: absolute;
-  top: -4px;
-  left: 2px;
-  right: 2px;
-  height: 18px;
-  background: #2a1a0a;
-  clip-path: polygon(10% 0%, 25% 40%, 40% 0%, 55% 40%, 70% 0%, 85% 40%, 100% 0%, 100% 100%, 0% 100%);
-}
-/* Snake tattoo hint on arm */
-#avatar-vibora .avatar-icon::after {
-  content: '🐍';
-  font-size: 8px;
-  position: absolute;
-  bottom: 4px;
-  right: 2px;
-  opacity: 0.5;
+  border-color: #22aa44;
+  box-shadow: inset 0 0 0 3px #22aa44;
 }
 #avatar-vibora.active .avatar-icon {
-  box-shadow: inset 0 -4px 0 #a8886a, inset 0 0 0 3px #22aa44, 0 0 16px #22aa44;
+  box-shadow: inset 0 0 0 3px #22aa44, 0 0 16px #22aa44;
 }
 
 .avatar-name {
