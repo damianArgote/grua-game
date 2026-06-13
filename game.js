@@ -289,6 +289,62 @@ function beepHookComplete()  { beep(880, 0.12, 0.1); setTimeout(() => beep(1100,
 function beepDeliver()       { beep(660, 0.1, 0.1); setTimeout(() => beep(880, 0.15, 0.1), 120); }
 function beepTimerLow()      { beep(440, 0.08, 0.06); }
 
+// ── Audio File System (new Audio) ──
+
+const AUDIO = {
+  // Ruta base — cambiar a '.mp3' cuando tengas los archivos reales
+  ext: '.wav',
+
+  // Banco de sonidos
+  sounds: {
+    musica_fondo: null,
+    gancho:       null,
+    monedas:      null,
+    alarma:       null,
+  },
+
+  audioUnlocked: false,
+
+  /** Inicializa todos los Audio objects (llamar una vez) */
+  init() {
+    for (const key of Object.keys(this.sounds)) {
+      const path = `sonidos/${key}${this.ext}`;
+      const audio = new Audio(path);
+      if (key === 'musica_fondo') {
+        audio.loop = true;
+        audio.volume = 0.4;
+      } else {
+        audio.volume = 0.6;
+      }
+      this.sounds[key] = audio;
+    }
+  },
+
+  /** Reproduce un efecto (resetea currentTime para允许 golpes rápidos consecutivos) */
+  play(key) {
+    const audio = this.sounds[key];
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      audio.play().catch(() => {}); // silencioso si el browser lo bloquea
+    } catch (_) {}
+  },
+
+  /** Arranca la música de fondo (solo después de interacción del usuario) */
+  startMusic() {
+    if (this.audioUnlocked) return;
+    this.audioUnlocked = true;
+    const bg = this.sounds.musica_fondo;
+    if (bg) {
+      bg.currentTime = 0;
+      bg.play().catch(() => {});
+    }
+  },
+};
+
+// Inicializar ni bien se carga el script
+AUDIO.init();
+
 // ==========================================
 // 7. GAME STATE
 // ==========================================
@@ -328,6 +384,10 @@ const keys = {};
 document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (e.code === 'Space') e.preventDefault();
+  // Primer toque de movimiento → desbloquea audio y arranca música
+  if (!AUDIO.audioUnlocked && /^(Arrow|Key[WASD])/.test(e.code)) {
+    AUDIO.startMusic();
+  }
 });
 document.addEventListener('keyup', (e) => {
   keys[e.code] = false;
@@ -378,6 +438,7 @@ function spawnCar(force) {
   };
 
   game.worldCars.push(car);
+  AUDIO.play('alarma');
   game.target = car;
   if (force !== true) sayDialogue('approaching');
   updateHUDTarget();
@@ -492,6 +553,7 @@ function completeHook() {
   const target = game.target;
   if (!target) return;
   beepHookComplete();
+  AUDIO.play('gancho');
   game.truck.towing = target;
   target.hooked = true;
   game.isHooking = false;
@@ -521,6 +583,7 @@ function updateDelivery() {
     spawnPopup(CFG.BASE.x + CFG.BASE.w / 2, CFG.BASE.y + 20,
       `+${car.points} pts +${car.timeBonus}s`, '#ffde5c');
     beepDeliver();
+    AUDIO.play('monedas');
     sayDialogue('delivering');
     game.phase = 'delivering';
     t.towing = null;
