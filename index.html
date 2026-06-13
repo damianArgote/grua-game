@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>grua-game — Operación Remolque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container">
+    <!-- HUD -->
+    <div id="hud">
+      <div class="hud-item">
+        <span class="hud-label">PUNTOS</span>
+        <span class="hud-value" id="hud-score">00000</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">AUTOS</span>
+        <span class="hud-value" id="hud-cars">0</span>
+      </div>
+      <div class="hud-item" id="hud-timer-box">
+        <span class="hud-label">TIEMPO</span>
+        <span class="hud-value" id="hud-timer">60</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">OBJETIVO</span>
+        <span class="hud-value" id="hud-target">—</span>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <canvas id="gameCanvas" width="960" height="600"></canvas>
+
+    <!-- Dialogue Box -->
+    <div id="dialogue-box">
+      <div id="dialogue-char">Evelyn</div>
+      <div id="dialogue-text">¡Manos a la obra, equipo! Buscando infractores...</div>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div id="gameover-overlay" class="hidden">
+      <div id="gameover-content">
+        <h1>¡TIEMPO FUERA!</h1>
+        <div class="gameover-stats">
+          <p>PUNTAJE FINAL</p>
+          <span class="gameover-score" id="final-score">0</span>
+        </div>
+        <div class="gameover-stats">
+          <p>AUTOS REMOLCADOS</p>
+          <span class="gameover-score" id="final-cars">0</span>
+        </div>
+        <button id="restart-btn">JUGAR DE NUEVO</button>
+      </div>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
